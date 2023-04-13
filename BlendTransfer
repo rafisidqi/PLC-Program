@@ -1,0 +1,238 @@
+#fallTrig(CLK := #Auto);
+IF #fallTrig.Q THEN
+    #I := 0;
+END_IF;
+
+IF #Auto THEN
+    CASE #I OF
+        0:
+		    #Timer_Off1(IN := FALSE,
+                        PT := T#0s);
+            #Timer_Off2(IN := FALSE,
+                        PT := T#0s,
+                        ET => #ET);
+            
+			IF #Trigger_ESK THEN
+                #Stop := FALSE;
+                #ProsesFilling := TRUE;
+                #I := 10;
+			ELSE
+				#I := 1000;
+            END_IF;
+        10:
+            IF #T07_Ready THEN
+                IF #TT_T07 >= 55 AND #TT_T07 <= 60 THEN
+                    #I := 11;
+                END_IF;
+            ELSIF #T08_Ready THEN
+                IF #TT_T08 >= 55 AND #TT_T08 <= 60 THEN
+                    #I := 111;
+                END_IF;
+            END_IF;
+		
+		(* Below: Seq if T07 Selected for transfer *)
+		(* Seq 11 to 13 turn off T08 Transfer*)
+		11:
+			IF #SV_T08C_Opened or #M_P10_Run THEN
+				#RUN_M_P11 := FALSE;
+                #Timer_Off2(IN := TRUE,
+                            PT := T#6s,
+                            ET => #ET);
+                #I := 12;
+			ELSE
+			    #I := 13;
+			END_IF;			
+		12:
+			IF #Timer_Off2.Q THEN
+                #CMD_SV_T08B := FALSE;
+                #CMD_SV_T08C := FALSE;
+                #Timer_Off2(IN := FALSE,
+                            PT := T#0s);
+                #I := 13;
+            END_IF;
+		13:
+			IF SV_T08C_Closed THEN
+				#I := 20;
+			END_IF;
+		
+		(*Seq 20 to 90 initiate transfer t7*)	
+        20:
+			#T08isTransferring := false;
+			#T07isTransferring := true;
+            IF #SV_T07D_Opened THEN
+                #I := 30;
+            ELSIF #SV_T07D_Closed THEN
+                #I := 40;
+            END_IF;
+        30:
+            #CMD_SV_T07D := FALSE;
+            IF #SV_T07D_Closed THEN
+                #I := 40;
+            END_IF;
+        40:
+            IF #SV_T07C_Closed THEN
+                #I := 50;
+            ELSIF #SV_T07C_Opened THEN
+                #I := 60;
+            END_IF;
+        50:
+            #CMD_SV_T07C := TRUE;
+            IF #SV_T07C_Opened AND #SV_T08C_Closed THEN
+                #I := 60;
+            END_IF;
+        60:
+            IF #SV_T07B_Closed THEN
+                #I := 70;
+            ELSIF #SV_T07B_Opened THEN
+                #I := 80;
+            END_IF;
+        70:
+            #CMD_SV_T07B := TRUE;
+            IF #SV_T07B_Opened THEN
+                #I := 80;
+            END_IF;
+        80:
+            IF NOT #M_P10_Run THEN
+                #I := 90;
+            ELSIF #M_P10_Run THEN
+                #I := 0;
+            END_IF;
+        90:
+            #RUN_M_P10 := TRUE;
+            IF #M_P10_Run THEN
+                #I := 0;
+            END_IF;
+			
+		(* Below: Seq if T08 Selected for transfer *)
+		(* Seq 111 to 113 turn off T07 Transfer*)
+		111:
+			IF #SV_T07C_Opened OR #M_P10_Run THEN
+				#RUN_M_P10 := FALSE;
+                #Timer_Off2(IN := TRUE,
+                            PT := T#20s,
+                            ET => #ET);
+                #I := 112;
+			END_IF;			
+		112:
+			IF #Timer_Off2.Q THEN
+                #CMD_SV_T07B := FALSE;
+                #CMD_SV_T07C := FALSE;
+                #Timer_Off2(IN := FALSE,
+                            PT := T#0s);
+                #I := 113;
+            END_IF;
+		113:
+			IF SV_T07C_Closed THEN
+				#I := 120;
+			END_IF;	
+
+		(*Seq 120 to 190 initiate transfer t8*)				
+        120:
+			#T08isTransferring := true;
+			#T07isTransferring := false;
+            IF #SV_T08D_Opened THEN
+                #I := 130;
+            ELSIF #SV_T08D_Closed THEN
+                #I := 140;
+            END_IF;
+        130:
+            #CMD_SV_T08D := FALSE;
+            IF #SV_T08D_Closed THEN
+                #I := 140;
+            END_IF;
+        140:
+            IF #SV_T08C_Closed THEN
+                #I := 150;
+            ELSIF #SV_T08C_Opened THEN
+                #I := 160;
+            END_IF;
+        150:
+            #CMD_SV_T07C := FALSE;
+            #CMD_SV_T08C := TRUE;
+            IF #SV_T08C_Opened AND #SV_T07C_Closed THEN
+                #I := 160;
+            END_IF;
+        160:
+            IF #SV_T08B_Closed THEN
+                #I := 170;
+            ELSIF #SV_T08B_Opened THEN
+                #I := 180;
+            END_IF;
+        170:
+            #CMD_SV_T08B := TRUE;
+            IF #SV_T08B_Opened THEN
+                #I := 180;
+            END_IF;
+        180:
+            IF NOT #M_P11_Run THEN
+                #I := 190;
+            ELSIF #M_P11_Run THEN
+                #I := 0;
+            END_IF;
+        190:
+            #RUN_M_P11 := TRUE;
+            IF #M_P11_Run THEN
+                #I := 0;
+            END_IF;
+			
+		(* Below: Seq for stopping transfer *)
+		1000:
+            IF NOT #Stop THEN
+                #i := 1010;
+			ELSE
+				#i := 0;
+            END_IF;
+        1010:
+            IF #T07isTransferring THEN
+                #RUN_M_P10 := FALSE;
+                #CMD_SV_T07D := TRUE;
+                #Timer_Off1(IN := TRUE,
+							PT := T#20s);
+                #i := 1020;
+            ELSIF #T08isTransferring THEN
+                #RUN_M_P11 := FALSE;
+                #CMD_SV_T08D := TRUE;
+                #Timer_Off2(IN := TRUE,
+                            PT := T#20s,
+                            ET => #ET);
+                #i := 1120;
+            END_IF;
+		
+		(* Stopping transfer if T07 active *)	
+        1020:
+            IF #Timer_Off1.Q THEN
+                #CMD_SV_T07B := FALSE;
+                #CMD_SV_T07C := FALSE;
+                #Timer_Off1(IN := FALSE,
+                            PT := T#0s);
+                #i := 1030;
+            END_IF;
+        1030:
+            IF NOT #M_P10_Run AND #SV_T07B_Closed AND #SV_T07C_Closed THEN
+                #ProsesFilling := FALSE;
+                #Stop := TRUE;
+				#T07isTransferring := false;
+                #I := 0;
+            END_IF;
+            
+		(* Stopping transfer if T08 active *)		
+		1120:
+            IF #Timer_Off2.Q THEN
+                #CMD_SV_T08B := FALSE;
+                #CMD_SV_T08C := FALSE;
+                #Timer_Off2(IN := FALSE,
+                            PT := T#0s,
+                            ET => #ET);
+                #i := 1130;
+                END_IF;
+        1130:
+            IF NOT #M_P11_Run AND #SV_T08B_Closed AND #SV_T08C_Closed THEN
+                #ProsesFilling := FALSE;
+                #Stop := TRUE;
+				#T07isTransferring := false;
+                #i := 0;
+            END_IF;
+    END_CASE;
+ELSE
+    
+END_IF;
